@@ -1,0 +1,91 @@
+import {useEffect,useState,useCallback,useRef} from 'react';
+import {createClient} from '@supabase/supabase-js';
+const sb=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY);
+const R:any={Common:{c:'#94a3b8',g:'#94a3b8,#64748b',e:'⚪',s:0},Uncommon:{c:'#4ade80',g:'#4ade80,#16a34a',e:'🟢',s:1},Rare:{c:'#38bdf8',g:'#38bdf8,#2563eb',e:'🔷',s:2},Epic:{c:'#c084fc',g:'#c084fc,#7e22ce',e:'🔮',s:4},Legendary:{c:'#fbbf24',g:'#fde047,#f59e0b',e:'👑',s:5},Mythical:{c:'#f472b6',g:'#f472b6,#be185d',e:'💎',s:7},'Ultra Rare':{c:'#fb7185',g:'#fb7185,#e11d48',e:'🔥',s:9},Exclusive:{c:'#fff',g:'#fff,#a5f3fc',e:'🌟',s:11}};
+const ORDER=Object.keys(R);const rar=(s:number)=>ORDER[[...ORDER].reverse().findIndex(k=>s>=R[k].s)>=0?ORDER.length-1-[...ORDER].reverse().findIndex(k=>s>=R[k].s):0];
+const fmt=(n:number)=>Number(n).toLocaleString('ru-RU');const L='ABEKMHOPCTYX';
+const AV=['🚗','🏎️','🚙','🚕','🛻','🚓','🚌','🏍️'];const av=(u:string)=>AV[[...(u||'a')].reduce((a,c)=>a+c.charCodeAt(0),0)%8];
+let ac:any=null,mute=false;
+function snd(f:number,d=.1,t:any='triangle',v=.07,at=0){if(mute)return;try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(ac.destination);const s=ac.currentTime+at;o.start(s);g.gain.exponentialRampToValueAtTime(.0001,s+d);o.stop(s+d)}catch{}}
+const fan=(s:number)=>{const n=Math.min(3+s,8);for(let i=0;i<n;i++)snd(440*Math.pow(1.122,i*2),.25,'square',.05,i*.09)};
+function Num({v}:{v:number}){const [x,setX]=useState(v);useEffect(()=>{let f=0;const a=x,t=Date.now();const k=()=>{const p=Math.min(1,(Date.now()-t)/600);setX(Math.round(a+(v-a)*p));if(p<1)f=requestAnimationFrame(k)};k();return()=>cancelAnimationFrame(f)},[v]);return <>{fmt(x)}</>}
+function Plate({p,size=1}:{p:any,size?:number}){const r=R[p.rarity]||R.Common;const s=p.plate||'';const hi=p.score>=5;
+  return <span className={`plate-frame ${p.score>=2?'shine':''} ${hi?'rainbow glow':''}`} style={{background:`linear-gradient(135deg,${r.g})`,['--g' as any]:r.c,fontSize:16*size}}>
+  <span className="plate"><span style={{padding:'.15em .5em',fontSize:'1.9em',letterSpacing:'.08em'}}>{s.slice(0,6)}</span><span style={{borderLeft:'2px solid #111',padding:'0 .5em',display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',lineHeight:1}}><b style={{fontSize:'1.2em'}}>{s.slice(6)}</b><small style={{fontSize:'.45em'}}>RUS 🇷🇺</small></span></span></span>}
+const Tag=({r}:{r:string})=><span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:R[r]?.c,color:'#1a1033'}}>{R[r]?.e} {r}</span>;
+function Confetti({k}:{k:number}){if(!k)return null;return <>{Array.from({length:60},(_,i)=><span key={k+'_'+i} className="conf" style={{left:Math.random()*100+'%',background:['#f43f5e','#fbbf24','#22d3ee','#a78bfa','#4ade80'][i%5],['--dx' as any]:(Math.random()*200-100)+'px',animationDelay:Math.random()*.5+'s'}}/>)}</>}
+export default function App(){
+  const [me,setMe]=useState<any>(null);const [prof,setProf]=useState<any>(null);const [tab,setTab]=useState('gen');const [toasts,setT]=useState<any[]>([]);const [conf,setConf]=useState(0);const [m,setM]=useState(false);
+  const T=(t:string,bad=false)=>{const id=Math.random();setT(a=>[...a,{id,t,bad}]);setTimeout(()=>setT(a=>a.filter(x=>x.id!==id)),3500)};
+  useEffect(()=>{sb.auth.getSession().then(({data})=>setMe(data.session?.user??null));const {data}=sb.auth.onAuthStateChange((_,s)=>setMe(s?.user??null));return()=>data.subscription.unsubscribe()},[]);
+  const refresh=useCallback(async()=>{if(!me)return;const {data}=await sb.from('profiles').select('*').eq('id',me.id).single();setProf(data)},[me]);
+  useEffect(()=>{refresh()},[refresh]);
+  const rpc=async(fn:string,args?:any)=>{const {data,error}=await sb.rpc(fn,args);if(error){T(error.message,true);snd(160,.3,'sawtooth');return null}refresh();return data??true};
+  if(!me)return <Auth/>;
+  const tabs:any={gen:['🎰','Roll'],col:['🗂️','Garage'],mkt:['🛒','Market'],lead:['🏆','Top'],daily:['🎁','Daily']};
+  const lvl=prof?.level||1,base=50*(lvl-1)**2,nxt=50*lvl**2,pct=prof?Math.min(100,(prof.xp-base)/(nxt-base)*100):0;
+  return <div className="max-w-3xl mx-auto p-3 pb-28">
+    <Confetti k={conf}/>
+    <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 space-y-2">{toasts.map(t=><div key={t.id} className="toast panel px-4 py-2 font-semibold" style={{background:t.bad?'#be123c':'#16a34a'}}>{t.t}</div>)}</div>
+    <header className="panel p-3 mb-4 flex items-center gap-3">
+      <div className="text-3xl bg-white/15 rounded-full w-12 h-12 flex items-center justify-center">{av(prof?.username)}</div>
+      <div className="flex-1 min-w-0"><div className="font-bold truncate">{prof?.username} <span className="chip on ml-1">Lv {lvl}</span></div>
+        <div className="h-3 rounded-full bg-black/30 mt-1 overflow-hidden"><div className="h-full rounded-full transition-all duration-700" style={{width:pct+'%',background:'linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6)'}}/></div>
+        <div className="text-[11px] opacity-70">{prof?.xp-base}/{nxt-base} XP to level {lvl+1}</div></div>
+      <div className="text-right"><div className="text-2xl font-bold text-yellow-300">🪙 <Num v={prof?.balance||0}/></div>
+        <button className="text-xs opacity-70" onClick={()=>{mute=!mute;setM(mute)}}>{m?'🔇':'🔊'}</button> <button className="text-xs opacity-70 underline" onClick={()=>sb.auth.signOut()}>out</button></div></header>
+    {tab==='gen'&&<Gen rpc={rpc} T={T} boom={()=>setConf(c=>c+1)}/>}{tab==='col'&&<Col me={me} rpc={rpc} T={T}/>}{tab==='mkt'&&<Mkt me={me} rpc={rpc} T={T}/>}{tab==='lead'&&<Lead/>}{tab==='daily'&&<Daily prof={prof} rpc={rpc} T={T} boom={()=>setConf(c=>c+1)}/>}
+    <nav className="fixed bottom-0 inset-x-0 p-2 flex justify-center z-40"><div className="panel flex gap-1 p-1.5 w-full max-w-md" style={{background:'#241352ee'}}>{Object.keys(tabs).map(k=><button key={k} onClick={()=>{setTab(k);snd(520,.06)}} className={`flex-1 rounded-xl py-1.5 text-center transition ${tab===k?'bg-white text-violet-900 -translate-y-2 shadow-lg':''}`}><div className="text-xl">{tabs[k][0]}</div><div className="text-[11px] font-bold">{tabs[k][1]}</div></button>)}</div></nav></div>}
+function Auth(){const [e,setE]=useState('');const [pw,setPw]=useState('');const [u,setU]=useState('');const [reg,setReg]=useState(true);const [m,setM]=useState('');
+  const go=async()=>{const r=reg?await sb.auth.signUp({email:e,password:pw,options:{data:{username:u}}}):await sb.auth.signInWithPassword({email:e,password:pw});if(r.error)setM(r.error.message)};
+  const i="w-full p-3 rounded-xl bg-white/15 mb-3 outline-none placeholder-white/50";
+  return <div className="max-w-sm mx-auto mt-16 p-4"><div className="text-center mb-6"><div className="text-6xl bob">🎰</div><h1 className="text-4xl font-bold" style={{fontFamily:'Russo One'}}>PLATE RUSH</h1><p className="opacity-80">Roll plates. Catch rare ones. Trade them.</p></div>
+  <div className="panel p-5">{reg&&<input className={i} placeholder="Username" value={u} onChange={x=>setU(x.target.value)}/>}<input className={i} placeholder="Email" value={e} onChange={x=>setE(x.target.value)}/><input className={i} type="password" placeholder="Password (6+)" value={pw} onChange={x=>setPw(x.target.value)}/>
+  <button className="btn w-full" onClick={go}>{reg?'Start playing — free 🪙1000':'Log in'}</button><button className="text-sm underline mt-3 opacity-80" onClick={()=>setReg(!reg)}>{reg?'I already have an account':'Create account'}</button><p className="text-pink-300 mt-2 text-sm">{m}</p></div></div>}
+const fake=()=>{const s=Math.random()<.7?0:Math.random()<.6?1:[2,2,4,5,7,9,11][Math.random()*7|0];const d=String(Math.random()*1000|0).padStart(3,'0');return{plate:L[Math.random()*12|0]+d+L[Math.random()*12|0]+L[Math.random()*12|0]+['77','78','99','50','16','52'][Math.random()*6|0],score:s,rarity:rar(s)}};
+function Gen({rpc,T,boom}:any){const [reel,setReel]=useState<any[]>([]);const [x,setX]=useState(0);const [go,setGo]=useState(false);const [busy,setB]=useState(false);const [res,setRes]=useState<any>(null);const [hist,setH]=useState<any[]>([]);const [best,setBest]=useState(0);const box=useRef<HTMLDivElement>(null);
+  const roll=async()=>{if(busy)return;setB(true);setRes(null);const r=await rpc('generate_plate');if(!r||r===true){setB(false);return}
+    const f=Array.from({length:34},fake);f[28]=r;setGo(false);setX(0);setReel(f);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{setGo(true);setX(-(28*208+100-(box.current!.clientWidth/2)))}));
+    for(let i=0;i<26;i++)setTimeout(()=>snd(300+i*14,.04,'square',.03),Math.pow(i/26,.55)*3800);
+    setTimeout(()=>{setRes(r);setH(h=>[r,...h].slice(0,8));setBest(b=>Math.max(b,r.score));setB(false);fan(r.score);if(r.score>=2)boom();if(r.score>=5)T(`${R[r.rarity].e} ${r.rarity} ${r.plate}!!!`)},4200)};
+  return <div><div className="panel p-4 text-center">
+    <div ref={box} className="relative overflow-hidden rounded-2xl bg-black/30 py-5 mb-4" style={{minHeight:110}}>
+      {reel.length===0?<div className="py-4 opacity-70">Press ROLL to open a plate crate 📦</div>:<div className="flex" style={{gap:8,transform:`translateX(${x}px)`,transition:go?'transform 4s cubic-bezier(.12,.7,.1,1)':'none'}}>{reel.map((p,i)=><div key={i} className="shrink-0 flex justify-center" style={{width:200}}><Plate p={p} size={.75}/></div>)}</div>}
+      <div className="absolute inset-y-0 left-1/2 w-1 bg-yellow-300 shadow-[0_0_14px_#fde047] -translate-x-1/2"/></div>
+    {res&&!busy&&<div className="pop mb-4"><div className="mb-2"><Plate p={res} size={1.25}/></div><div className="text-2xl font-bold" style={{color:R[res.rarity].c}}>{R[res.rarity].e} {res.rarity}!</div><div className="opacity-90">Worth about 🪙{fmt(res.base_value)} · Region {res.region} · #{res.serial}</div></div>}
+    <button className="btn text-xl px-10 py-3" style={{['--c' as any]:'#f59e0b'}} disabled={busy} onClick={roll}>{busy?'Rolling…':'🎰 ROLL · 🪙100'}</button>
+    <div className="text-xs opacity-70 mt-3">Best this session: {best?R[rar(best)].e+' '+rar(best):'—'}</div></div>
+  <div className="panel p-3 mt-4"><div className="font-bold mb-2">Recent pulls</div><div className="flex gap-2 overflow-x-auto pb-2">{hist.length===0&&<span className="opacity-60 text-sm">Nothing yet — your first roll is waiting!</span>}{hist.map((p,i)=><Plate key={i} p={p} size={.6}/>)}</div></div>
+  <div className="panel p-3 mt-4 flex flex-wrap gap-2 text-xs"><b className="w-full text-sm">Rarity tiers</b>{ORDER.map(k=><Tag key={k} r={k}/>)}<span className="w-full opacity-70">Triple digits, 00x numbers, sequences, mirrored letters and big-city regions make plates rarer.</span></div></div>}
+function Col({me,rpc,T}:any){const [a,setA]=useState<any[]>([]);const [f,setF]=useState('All');const [sel,setSel]=useState<any>(null);const [v,setV]=useState('');
+  const load=()=>sb.from('plates').select('*').eq('owner_id',me.id).order('score',{ascending:false}).then(({data})=>setA(data||[]));useEffect(()=>{load()},[]);
+  const tot=a.reduce((s,p)=>s+Number(p.base_value),0);const cnt=(k:string)=>a.filter(p=>p.rarity===k).length;
+  const sell=async()=>{if(await rpc('list_plate',{p_plate:sel.plate,p_price:Number(v)})){T('Listed on the market! 🛒');snd(700,.15);setSel(null);load()}};
+  return <div><div className="panel p-4 mb-3 flex justify-around text-center"><div><div className="text-2xl font-bold">{a.length}</div><div className="text-xs opacity-70">plates</div></div><div><div className="text-2xl font-bold text-yellow-300">🪙{fmt(tot)}</div><div className="text-xs opacity-70">garage value</div></div></div>
+  <div className="flex gap-2 overflow-x-auto pb-2 mb-2">{['All',...ORDER].map(k=><button key={k} className={`chip ${f===k?'on':''}`} onClick={()=>setF(k)}>{k==='All'?`All ${a.length}`:`${R[k].e} ${cnt(k)}`}</button>)}</div>
+  {a.length===0&&<div className="panel p-8 text-center opacity-80">Your garage is empty 🚗 Go roll your first plate!</div>}
+  <div className="grid sm:grid-cols-2 gap-3">{a.filter(p=>f==='All'||p.rarity===f).map(p=><div key={p.plate} className="panel p-3 text-center"><Plate p={p} size={.9}/><div className="mt-2 flex items-center justify-between"><Tag r={p.rarity}/><span className="text-yellow-300 font-bold">🪙{fmt(p.base_value)}</span></div>
+    {p.listed?<div className="text-amber-300 text-sm mt-2">🛒 On the market</div>:<button className="btn mt-2 w-full text-sm" style={{['--c' as any]:'#8b5cf6'}} onClick={()=>{setSel(p);setV(String(p.base_value))}}>Sell</button>}</div>)}</div>
+  {sel&&<div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={()=>setSel(null)}><div className="panel p-5 w-full max-w-sm pop" style={{background:'#2a1760'}} onClick={e=>e.stopPropagation()}><div className="text-center mb-3"><Plate p={sel}/></div><label className="text-sm opacity-80">Your price (market value 🪙{fmt(sel.base_value)})</label><input type="number" className="w-full p-3 rounded-xl bg-white/15 my-2 text-xl" value={v} onChange={e=>setV(e.target.value)}/><div className="text-xs opacity-70 mb-3">You receive 95% — a 5% fee is removed from the game.</div><button className="btn w-full" onClick={sell}>List for 🪙{fmt(Number(v)||0)}</button></div></div>}</div>}
+function Mkt({me,rpc,T}:any){const [a,setA]=useState<any[]>([]);const [q,setQ]=useState('');const [asc,setAsc]=useState(true);const [f,setF]=useState('All');
+  const load=()=>sb.from('listings').select('*,plates(*),profiles!listings_seller_id_fkey(username)').eq('status','active').order('price',{ascending:asc}).then(({data})=>setA(data||[]));
+  useEffect(()=>{load();const c=sb.channel('mkt').on('postgres_changes',{event:'*',schema:'public',table:'listings'},load).subscribe();return()=>{sb.removeChannel(c)}},[asc]);
+  return <div><div className="flex gap-2 mb-2"><input className="flex-1 p-3 rounded-xl bg-white/15 outline-none" placeholder="🔍 Search plate…" value={q} onChange={e=>setQ(e.target.value.toUpperCase())}/><button className="btn" style={{['--c' as any]:'#06b6d4'}} onClick={()=>setAsc(!asc)}>{asc?'Cheap first':'Pricey first'}</button></div>
+  <div className="flex gap-2 overflow-x-auto pb-2 mb-2">{['All',...ORDER].map(k=><button key={k} className={`chip ${f===k?'on':''}`} onClick={()=>setF(k)}>{k==='All'?'All':R[k].e+' '+k}</button>)}</div>
+  {a.length===0&&<div className="panel p-8 text-center opacity-80">No plates for sale yet 🛒 List one from your Garage!</div>}
+  <div className="space-y-3">{a.filter(l=>l.plate.includes(q)&&(f==='All'||l.plates.rarity===f)).map(l=>{const deal=l.price<l.plates.base_value;return <div key={l.id} className="panel p-3 flex flex-wrap items-center justify-between gap-3"><div><Plate p={l.plates} size={.85}/><div className="mt-1 flex gap-2 items-center"><Tag r={l.plates.rarity}/><span className="text-xs opacity-70">{av(l.profiles?.username)} {l.profiles?.username}</span></div></div>
+    <div className="text-right"><div className="text-xl font-bold text-yellow-300">🪙{fmt(l.price)}</div><div className="text-xs">{deal?<span className="text-green-300 font-bold">🔥 {Math.round((1-l.price/l.plates.base_value)*100)}% under value</span>:<span className="opacity-60">value 🪙{fmt(l.plates.base_value)}</span>}</div>
+    {l.seller_id===me.id?<button className="text-xs underline mt-1" onClick={async()=>{await rpc('cancel_listing',{p_id:l.id});load()}}>Take back</button>:<button className="btn mt-1" onClick={async()=>{if(await rpc('buy_listing',{p_id:l.id})){T('Plate bought! 🎉');fan(3);load()}}}>Buy</button>}</div></div>})}</div></div>}
+function Lead(){const [a,setA]=useState<any[]>([]);const [k,setK]=useState('collection_value');
+  useEffect(()=>{sb.from('leaderboard').select('*').order(k,{ascending:false}).limit(20).then(({data})=>setA(data||[]))},[k]);
+  const K:any={collection_value:'💎 Value',balance:'🪙 Richest',level:'⭐ Level',plates_sold:'🤝 Sales',plate_count:'🗂️ Plates'};const val=(r:any)=>fmt(r[k]);
+  return <div><div className="flex gap-2 overflow-x-auto pb-2 mb-3">{Object.keys(K).map(x=><button key={x} onClick={()=>setK(x)} className={`chip ${k===x?'on':''}`}>{K[x]}</button>)}</div>
+  <div className="flex items-end justify-center gap-2 mb-4">{[1,0,2].map(i=>a[i]&&<div key={i} className="panel p-3 text-center flex-1" style={{paddingTop:i===0?36:14,background:['#fbbf2433','#cbd5e133','#fb923c33'][i]}}><div className="text-3xl">{['🥇','🥈','🥉'][i]}</div><div className="text-3xl">{av(a[i].username)}</div><div className="font-bold truncate">{a[i].username}</div><div className="text-yellow-300 text-sm">{val(a[i])}</div></div>)}</div>
+  {a.slice(3).map((r,i)=><div key={r.id} className="panel p-3 mb-2 flex items-center gap-3"><b className="w-6 opacity-70">{i+4}</b><span className="text-2xl">{av(r.username)}</span><span className="flex-1 font-semibold">{r.username}</span><b className="text-yellow-300">{val(r)}</b></div>)}</div>}
+function Daily({prof,rpc,T,boom}:any){const [pop,setPop]=useState(0);if(!prof)return null;const td=new Date().toISOString().slice(0,10),yd=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const done=prof.last_claim===td;const cur=done?prof.streak:(prof.last_claim===yd?prof.streak+1:1);const today=((cur-1)%7)+1;
+  const claim=async()=>{const r=await rpc('claim_daily');if(r){setPop(Number(r));boom();fan(5);T(`+🪙${fmt(Number(r))} daily reward!`)}};
+  return <div className="panel p-5 text-center"><div className="text-5xl bob mb-2">🎁</div><h2 className="text-2xl font-bold">Daily rewards</h2><p className="opacity-80 mb-4">🔥 {prof.streak}-day streak — come back every day. Day 7 is a jackpot!</p>
+  <div className="grid grid-cols-7 gap-1.5 mb-5">{[1,2,3,4,5,6,7].map(d=>{const st=d<today||(d===today&&done)?'done':d===today?'now':'lock';return <div key={d} className={`rounded-xl py-2 text-xs font-bold ${st==='now'?'bob':''}`} style={{background:st==='now'?'#f59e0b':st==='done'?'#16a34a':'#ffffff1f',color:'#fff'}}><div>D{d}</div><div className="text-xl">{d===7?'💰':st==='done'?'✅':'🪙'}</div><div>{150+30*d+(d===7?500:0)}</div></div>})}</div>
+  <button className="btn text-lg px-8" disabled={done} onClick={claim}>{done?'Come back tomorrow ⏰':'Claim today\'s reward'}</button>{pop>0&&<div className="pop text-2xl text-yellow-300 font-bold mt-3">+🪙{fmt(pop)}</div>}</div>}
